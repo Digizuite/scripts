@@ -1,3 +1,16 @@
+/*
+This script migrates as much configuration as possible from the old transcode system to the new transcode system.
+
+Assumptions:
+	- This script is run against a 5.10 environment
+	- No manual changes have been made to any formats after upgrading the targeted environment to 5.10.
+
+Things to be aware of:
+	- Since this script changes the configuration of the targeted environment,
+	  please ensure that you handle the changes in Configuration Management after having run this script.
+*/
+
+
 
 -- Start transaction to ensure that the migration is atomic.
 BEGIN TRANSACTION
