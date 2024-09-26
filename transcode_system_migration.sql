@@ -17,7 +17,7 @@ BEGIN TRANSACTION
 BEGIN TRY
 
 SET NOCOUNT ON;
-    
+
 DECLARE @mediaFormatId INT,
     @mediaFormatTypeId INT,
     @name NVARCHAR(255),
@@ -31,7 +31,9 @@ DECLARE @mediaFormatId INT,
     @details NVARCHAR(MAX),
     @formatId INT,
     @compressionLevel INT,
-    @immediatelyGeneratedFor NVARCHAR(MAX);
+    @immediatelyGeneratedFor NVARCHAR(MAX),
+    @no_security_folder NVARCHAR(MAX),
+    @pre_generate_folders NVARCHAR(MAX);
 
 -- Create temp table with media formats to process.
 CREATE TABLE #mediaFormatsToProcess(
@@ -43,7 +45,9 @@ CREATE TABLE #mediaFormatsToProcess(
     videoBitrate INT,
     width INT,
     height INT,
-    settings NVARCHAR(1024)
+    settings NVARCHAR(1024),
+    no_security_folder nvarchar(max),
+    pre_generate_folders nvarchar(max)
 );
 
 -- Create temp table for keeping track of the migrated formats.
@@ -129,7 +133,7 @@ BEGIN
     UPDATE [dbo].[Formats]
     SET ImmediatelyGeneratedFor='[1]'
     WHERE Id=@formatId;
-    
+
     INSERT INTO #migratedFormats(mediaFormatId, formatId, extension, details)
     VALUES (@mediaFormatId, @formatId, 'mp4', @details);
 END
@@ -149,7 +153,7 @@ BEGIN
     UPDATE [dbo].[Formats]
     SET ImmediatelyGeneratedFor='[2]'
     WHERE Id=@formatId;
-    
+
     INSERT INTO #migratedFormats(mediaFormatId, formatId, extension, details)
     VALUES (@mediaFormatId, @formatId, 'mp3', @details);
 END
@@ -158,14 +162,39 @@ END
 -- Try migrating each media format that isn't already migrated.
 INSERT INTO #mediaFormatsToProcess
 SELECT mf.media_formatid, mf.media_format_typeid, mfl.medianame, mf.download_replace_mask,
-       mf.audiobitrate, mf.videobitrate, mf.width, mf.height, mf.settings
+       mf.audiobitrate, mf.videobitrate, mf.width, mf.height, mf.settings,
+
+       coalesce((select json_arrayagg(t.LayoutfolderId)
+                 from (select distinct LPD.LayoutfolderId
+                       from dz_profileformat pf
+                                join dz_profile p on pf.dz_profileid = p.dz_profileid
+                                join Layoutfolder_Profile_Destination LPD on p.dz_profileid = LPD.Dz_ProfileId
+                                join digitranscode_destination maybe_storage_manager_destination
+                                     on LPD.DestinationId =
+                                        maybe_storage_manager_destination.digitranscode_destinationid
+                                left join digitranscode_destination maybe_specific_destination
+                                          on maybe_specific_destination.StorageManagerId =
+                                             maybe_storage_manager_destination.digitranscode_destinationid
+                       where mf.media_formatid = pf.media_formatid
+                         and (maybe_storage_manager_destination.LaxSecurity = 1 or
+                              maybe_specific_destination.LaxSecurity = 1)) as t), '[]') as no_security_folder,
+
+       coalesce(
+               (select json_arrayagg(t.LayoutfolderId)
+                from (select distinct LPD.LayoutfolderId
+                      from dz_profileformat pf
+                               join dz_profile p on pf.dz_profileid = p.dz_profileid
+                               join Layoutfolder_Profile_Destination LPD on p.dz_profileid = LPD.Dz_ProfileId
+                      where mf.media_formatid = pf.media_formatid) as t)
+           , '[]')                                              as pre_generate_folders
+
 FROM [dbo].[media_format] mf
 JOIN [dbo].[media_format_language] mfl ON mf.media_formatid=mfl.media_formatid
 WHERE mf.mapped_to_format_id IS NULL AND mfl.languageid=3;
 
 WHILE(EXISTS(SELECT NULL FROM #mediaFormatsToProcess))
 BEGIN
-    SELECT TOP 1 
+    SELECT TOP 1
            @mediaFormatId=mediaFormatId,
            @mediaFormatTypeId=mediaFormatTypeId,
            @name=name,
@@ -174,7 +203,9 @@ BEGIN
            @videoBitrate=videoBitrate,
            @width=width,
            @height=height,
-           @settings=settings
+           @settings=settings,
+           @pre_generate_folders=pre_generate_folders,
+           @no_security_folder=no_security_folder
     FROM #mediaFormatsToProcess;
     DELETE FROM #mediaFormatsToProcess WHERE mediaFormatId=@mediaFormatId;
 
@@ -183,17 +214,17 @@ BEGIN
         print 'Can not migrate the media format ' + CONVERT(NVARCHAR(10), @mediaFormatId) + ' since a format with the name "' + @name + '" already exists';
     CONTINUE;
     END
-    
+
     -- Get the extension of the media format.
     SELECT TOP 1 @extension=extension FROM [dbo].[media_format_type_extension] WHERE media_format_typeid=@mediaFormatTypeId;
-    
+
     IF @extension IN ('jpg', 'jpeg', 'png', 'webp', 'avif', 'tif', 'tiff') AND (@settings IS NULL OR @settings='')
     BEGIN
         print 'No ImageMagick command is available for the image media format ' + CONVERT(NVARCHAR(10), @mediaFormatId) + '. ' +
               'Can only migrate image media formats with ImageMagick commands.';
         CONTINUE;
     END
-       
+
     -- Escape backslashes and double-quotes to ensure that the corresponding string is a valid JSON string.
     SET @settings = REPLACE(@settings, '\', '\\');
     SET @settings = REPLACE(@settings, '"', '\u0022');
@@ -203,144 +234,144 @@ BEGIN
     BEGIN
         SET @extension='jpeg';
         SET @details = '{"type":"JpegImageFormat",' +
-                        '"BackgroundColor":"transparent",' + 
-                        '"ColorSpace":0,' + 
+                        '"BackgroundColor":"transparent",' +
+                        '"ColorSpace":0,' +
                         '"Quality":0,' +
-                        '"TargetMaxSize":null,' + 
+                        '"TargetMaxSize":null,' +
                         '"Interlace":true,' +
-                        '"CropWidth":0,' + 
-                        '"CropHeight":0,' + 
-                        '"CropPosition":4,' + 
-                        '"Clip":false,' + 
+                        '"CropWidth":0,' +
+                        '"CropHeight":0,' +
+                        '"CropPosition":4,' +
+                        '"Clip":false,' +
                         '"DotsPerInchX":72,' +
-                        '"DotsPerInchY":72,' + 
-                        '"AutoOrient":true,' + 
-                        '"RemoveFileMetadata":false,' + 
-                        '"WatermarkAssetId":0,' + 
-                        '"WatermarkAssetExtension":"",' + 
-                        '"WatermarkPosition":4,' + 
-                        '"WatermarkCoveragePercentage":0,' + 
-                        '"WatermarkOffsetX":0,' + 
-                        '"WatermarkOffsetY":0,' + 
-                        '"WatermarkOpacityPercentage":0,' + 
+                        '"DotsPerInchY":72,' +
+                        '"AutoOrient":true,' +
+                        '"RemoveFileMetadata":false,' +
+                        '"WatermarkAssetId":0,' +
+                        '"WatermarkAssetExtension":"",' +
+                        '"WatermarkPosition":4,' +
+                        '"WatermarkCoveragePercentage":0,' +
+                        '"WatermarkOffsetX":0,' +
+                        '"WatermarkOffsetY":0,' +
+                        '"WatermarkOpacityPercentage":0,' +
                         '"CustomConversionCommand":"' + @settings + '",' +
-                        '"Height":0,' + 
-                        '"Width":0,' + 
-                        '"ResizeMode":2,' + 
-                        '"BackgroundWidth":0,' + 
+                        '"Height":0,' +
+                        '"Width":0,' +
+                        '"ResizeMode":2,' +
+                        '"BackgroundWidth":0,' +
                         '"BackgroundHeight":0}';
     END
     ELSE IF @extension='png'
     BEGIN
         SET @details = '{"type":"PngImageFormat",' +
-                        '"ColorSpace":0,' + 
+                        '"ColorSpace":0,' +
                         '"CompressionLevel":7,' +
                         '"Interlace":true,' +
-                        '"BackgroundColor":"transparent",' + 
-                        '"CropWidth":0,' + 
-                        '"CropHeight":0,' + 
-                        '"CropPosition":4,' + 
-                        '"Clip":false,' + 
+                        '"BackgroundColor":"transparent",' +
+                        '"CropWidth":0,' +
+                        '"CropHeight":0,' +
+                        '"CropPosition":4,' +
+                        '"Clip":false,' +
                         '"DotsPerInchX":72,' +
-                        '"DotsPerInchY":72,' + 
-                        '"AutoOrient":true,' + 
-                        '"RemoveFileMetadata":false,' + 
-                        '"WatermarkAssetId":0,' + 
-                        '"WatermarkAssetExtension":"",' + 
-                        '"WatermarkPosition":4,' + 
-                        '"WatermarkCoveragePercentage":0,' + 
-                        '"WatermarkOffsetX":0,' + 
-                        '"WatermarkOffsetY":0,' + 
-                        '"WatermarkOpacityPercentage":0,' + 
+                        '"DotsPerInchY":72,' +
+                        '"AutoOrient":true,' +
+                        '"RemoveFileMetadata":false,' +
+                        '"WatermarkAssetId":0,' +
+                        '"WatermarkAssetExtension":"",' +
+                        '"WatermarkPosition":4,' +
+                        '"WatermarkCoveragePercentage":0,' +
+                        '"WatermarkOffsetX":0,' +
+                        '"WatermarkOffsetY":0,' +
+                        '"WatermarkOpacityPercentage":0,' +
                         '"CustomConversionCommand":"' + @settings + '",' +
-                        '"Height":0,' + 
-                        '"Width":0,' + 
-                        '"ResizeMode":2,' + 
-                        '"BackgroundWidth":0,' + 
+                        '"Height":0,' +
+                        '"Width":0,' +
+                        '"ResizeMode":2,' +
+                        '"BackgroundWidth":0,' +
                         '"BackgroundHeight":0}';
     END
     ELSE IF @extension='webp'
     BEGIN
         SET @details = '{"type":"WebPImageFormat",' +
-                        '"ColorSpace":0,' + 
+                        '"ColorSpace":0,' +
                         '"Quality":0,' +
-                        '"BackgroundColor":"transparent",' + 
-                        '"CropWidth":0,' + 
-                        '"CropHeight":0,' + 
-                        '"CropPosition":4,' + 
-                        '"Clip":false,' + 
+                        '"BackgroundColor":"transparent",' +
+                        '"CropWidth":0,' +
+                        '"CropHeight":0,' +
+                        '"CropPosition":4,' +
+                        '"Clip":false,' +
                         '"DotsPerInchX":72,' +
-                        '"DotsPerInchY":72,' + 
-                        '"AutoOrient":true,' + 
-                        '"RemoveFileMetadata":false,' + 
-                        '"WatermarkAssetId":0,' + 
-                        '"WatermarkAssetExtension":"",' + 
-                        '"WatermarkPosition":4,' + 
-                        '"WatermarkCoveragePercentage":0,' + 
-                        '"WatermarkOffsetX":0,' + 
-                        '"WatermarkOffsetY":0,' + 
-                        '"WatermarkOpacityPercentage":0,' + 
+                        '"DotsPerInchY":72,' +
+                        '"AutoOrient":true,' +
+                        '"RemoveFileMetadata":false,' +
+                        '"WatermarkAssetId":0,' +
+                        '"WatermarkAssetExtension":"",' +
+                        '"WatermarkPosition":4,' +
+                        '"WatermarkCoveragePercentage":0,' +
+                        '"WatermarkOffsetX":0,' +
+                        '"WatermarkOffsetY":0,' +
+                        '"WatermarkOpacityPercentage":0,' +
                         '"CustomConversionCommand":"' + @settings + '",' +
-                        '"Height":0,' + 
-                        '"Width":0,' + 
-                        '"ResizeMode":2,' + 
-                        '"BackgroundWidth":0,' + 
+                        '"Height":0,' +
+                        '"Width":0,' +
+                        '"ResizeMode":2,' +
+                        '"BackgroundWidth":0,' +
                         '"BackgroundHeight":0}';
     END
     ELSE IF @extension='avif'
     BEGIN
         SET @details = '{"type":"AvifImageFormat",' +
-                        '"ColorSpace":0,' + 
+                        '"ColorSpace":0,' +
                         '"Quality":0,' +
-                        '"BackgroundColor":"transparent",' + 
-                        '"CropWidth":0,' + 
-                        '"CropHeight":0,' + 
-                        '"CropPosition":4,' + 
-                        '"Clip":false,' + 
+                        '"BackgroundColor":"transparent",' +
+                        '"CropWidth":0,' +
+                        '"CropHeight":0,' +
+                        '"CropPosition":4,' +
+                        '"Clip":false,' +
                         '"DotsPerInchX":72,' +
-                        '"DotsPerInchY":72,' + 
-                        '"AutoOrient":true,' + 
-                        '"RemoveFileMetadata":false,' + 
-                        '"WatermarkAssetId":0,' + 
-                        '"WatermarkAssetExtension":"",' + 
-                        '"WatermarkPosition":4,' + 
-                        '"WatermarkCoveragePercentage":0,' + 
-                        '"WatermarkOffsetX":0,' + 
-                        '"WatermarkOffsetY":0,' + 
-                        '"WatermarkOpacityPercentage":0,' + 
+                        '"DotsPerInchY":72,' +
+                        '"AutoOrient":true,' +
+                        '"RemoveFileMetadata":false,' +
+                        '"WatermarkAssetId":0,' +
+                        '"WatermarkAssetExtension":"",' +
+                        '"WatermarkPosition":4,' +
+                        '"WatermarkCoveragePercentage":0,' +
+                        '"WatermarkOffsetX":0,' +
+                        '"WatermarkOffsetY":0,' +
+                        '"WatermarkOpacityPercentage":0,' +
                         '"CustomConversionCommand":"' + @settings + '",' +
-                        '"Height":0,' + 
-                        '"Width":0,' + 
-                        '"ResizeMode":2,' + 
-                        '"BackgroundWidth":0,' + 
+                        '"Height":0,' +
+                        '"Width":0,' +
+                        '"ResizeMode":2,' +
+                        '"BackgroundWidth":0,' +
                         '"BackgroundHeight":0}';
     END
     ELSE IF @extension='tif' OR @extension='tiff'
     BEGIN
         SET @extension='tiff';
         SET @details = '{"type":"TiffImageFormat",' +
-                        '"ColorSpace":0,' + 
-                        '"BackgroundColor":"transparent",' + 
-                        '"CropWidth":0,' + 
-                        '"CropHeight":0,' + 
-                        '"CropPosition":4,' + 
-                        '"Clip":false,' + 
+                        '"ColorSpace":0,' +
+                        '"BackgroundColor":"transparent",' +
+                        '"CropWidth":0,' +
+                        '"CropHeight":0,' +
+                        '"CropPosition":4,' +
+                        '"Clip":false,' +
                         '"DotsPerInchX":72,' +
-                        '"DotsPerInchY":72,' + 
-                        '"AutoOrient":true,' + 
-                        '"RemoveFileMetadata":false,' + 
-                        '"WatermarkAssetId":0,' + 
-                        '"WatermarkAssetExtension":"",' + 
-                        '"WatermarkPosition":4,' + 
-                        '"WatermarkCoveragePercentage":0,' + 
-                        '"WatermarkOffsetX":0,' + 
-                        '"WatermarkOffsetY":0,' + 
-                        '"WatermarkOpacityPercentage":0,' + 
+                        '"DotsPerInchY":72,' +
+                        '"AutoOrient":true,' +
+                        '"RemoveFileMetadata":false,' +
+                        '"WatermarkAssetId":0,' +
+                        '"WatermarkAssetExtension":"",' +
+                        '"WatermarkPosition":4,' +
+                        '"WatermarkCoveragePercentage":0,' +
+                        '"WatermarkOffsetX":0,' +
+                        '"WatermarkOffsetY":0,' +
+                        '"WatermarkOpacityPercentage":0,' +
                         '"CustomConversionCommand":"' + @settings + '",' +
-                        '"Height":0,' + 
-                        '"Width":0,' + 
-                        '"ResizeMode":2,' + 
-                        '"BackgroundWidth":0,' + 
+                        '"Height":0,' +
+                        '"Width":0,' +
+                        '"ResizeMode":2,' +
+                        '"BackgroundWidth":0,' +
                         '"BackgroundHeight":0}';
     END
     ELSE IF @extension='mp3'
@@ -351,41 +382,52 @@ BEGIN
             WHEN @audioBitrate < 192000 THEN 4
             ELSE 2
         END;
-        SET @details = '{"type":"Mp3AudioFormat",' + 
-                        '"CompressionLevel":' + CONVERT(NVARCHAR(10), @compressionLevel) + '}';
+        SET @details = '{"type":"Mp3AudioFormat",' +
+                        '"CompressionLevel":' + CONVERT(NVARCHAR(10), @compressionLevel) + ',' +
+                        '"Bitrate":' + CONVERT(NVARCHAR(10), @audioBitrate) +
+                        '}';
     END
     ELSE IF @extension='avi'
     BEGIN
         SET @details = '{"type":"AviVideoFormat",' +
                         '"BackgroundColor":"#00000000",' +
-                        '"CompressionLevel":23,' + 
+                        '"CompressionLevel":23,' +
                         '"Height":' + CONVERT(NVARCHAR(10), @height) + ',' +
                         '"Width":' + CONVERT(NVARCHAR(10), @width) + ',' +
                         '"ResizeMode":0,' + -- fixed size
                         '"BackgroundWidth":0,' +
-                        '"BackgroundHeight":0}'
+                        '"BackgroundHeight":0,' +
+                        '"AudioBitrate":' + CONVERT(NVARCHAR(10), @audioBitrate) + ',' +
+                        '"VideoBitrate":' + CONVERT(NVARCHAR(10), @videoBitrate) +
+                        '}'
     END
     ELSE IF @extension='mov'
     BEGIN
         SET @details = '{"type":"MovVideoFormat",' +
                         '"BackgroundColor":"#00000000",' +
-                        '"CompressionLevel":23,' + 
+                        '"CompressionLevel":23,' +
                         '"Height":' + CONVERT(NVARCHAR(10), @height) + ',' +
                         '"Width":' + CONVERT(NVARCHAR(10), @width) + ',' +
                         '"ResizeMode":0,' + -- fixed size
                         '"BackgroundWidth":0,' +
-                        '"BackgroundHeight":0}'
+                        '"BackgroundHeight":0,' +
+                        '"AudioBitrate":' + CONVERT(NVARCHAR(10), @audioBitrate) + ',' +
+                        '"VideoBitrate":' + CONVERT(NVARCHAR(10), @videoBitrate) +
+                        '}'
     END
     ELSE IF @extension='mp4'
     BEGIN
         SET @details = '{"type":"Mp4VideoFormat",' +
                         '"BackgroundColor":"#00000000",' +
-                        '"CompressionLevel":23,' + 
+                        '"CompressionLevel":23,' +
                         '"Height":' + CONVERT(NVARCHAR(10), @height) + ',' +
                         '"Width":' + CONVERT(NVARCHAR(10), @width) + ',' +
                         '"ResizeMode":0,' + -- fixed size
                         '"BackgroundWidth":0,' +
-                        '"BackgroundHeight":0}'
+                        '"BackgroundHeight":0,' +
+                        '"AudioBitrate":' + CONVERT(NVARCHAR(10), @audioBitrate) + ',' +
+                        '"VideoBitrate":' + CONVERT(NVARCHAR(10), @videoBitrate) +
+                        '}'
     END
     ELSE IF @extension='pdf'
         SET @details = '{"type":"PdfFormat"}'
@@ -395,21 +437,21 @@ BEGIN
               'Can not migrate the media format ' + CONVERT(NVARCHAR(10), @mediaFormatId) + '.';
         CONTINUE;
     END
-        
+
     -- Find asset types to generate renditions of the format for immediately.
     SET @immediatelyGeneratedFor = COALESCE(
-        '[' + (SELECT STRING_AGG(assetType, ',') FROM digizuite_assettype_configs_upload_quality WHERE FormatId = @mediaFormatId) + ']', 
+        '[' + (SELECT STRING_AGG(assetType, ',') FROM digizuite_assettype_configs_upload_quality WHERE FormatId = @mediaFormatId) + ']',
         '[]'
     );
-        
+
     -- Make the download replace mask prettier.
     -- This is technically not needed but helps to avoid confusion.
     SET @downloadReplaceMask = (SELECT REPLACE(@downloadReplaceMask, '[%MediaFormatId%]', '[%FormatId%]'));
     SET @downloadReplaceMask = (SELECT REPLACE(@downloadReplaceMask, '[%MediaFormatName%]', '[%FormatName%]'));
 
     -- Create new format.
-    INSERT INTO [dbo].[Formats]([Name],[Description],[Category],[ImmediatelyGeneratedFor],[DownloadReplaceMask],[Details],[CreatedAt],[LastModified])
-    VALUES (@name, '', 0, @immediatelyGeneratedFor, NULLIF(@downloadReplaceMask, ''), @details, GETDATE(), GETDATE());
+    INSERT INTO [dbo].[Formats]([Name],[Description],[Category],[ImmediatelyGeneratedFor],[DownloadReplaceMask],[Details],[CreatedAt],[LastModified],[PreGenerateForChannelFolderIds],[NoSecurityWhenInChannelFolderIds])
+    VALUES (@name, '', 0, @immediatelyGeneratedFor, NULLIF(@downloadReplaceMask, ''), @details, GETDATE(), GETDATE(), @pre_generate_folders, @no_security_folder);
 
     SELECT @formatId=Id FROM [dbo].[Formats] WHERE [Name]=@name;
 
@@ -504,6 +546,33 @@ GROUP BY af.assetid;
 UPDATE [dbo].[media_format]
 SET mapped_to_format_id=-1
 WHERE media_formatid IN (SELECT media_format_id FROM @source_copy_media_format_ids);
+
+update Formats
+set NoSecurityWhenInChannelFolderIds = coalesce((select json_arrayagg(t.LayoutfolderId)
+                                                 from (select distinct LPD.LayoutfolderId
+                                                       from dz_profileformat pf
+                                                                join dz_profile p on pf.dz_profileid = p.dz_profileid
+                                                                join Layoutfolder_Profile_Destination LPD
+                                                                     on p.dz_profileid = LPD.Dz_ProfileId
+                                                                join digitranscode_destination maybe_storage_manager_destination
+                                                                     on LPD.DestinationId =
+                                                                        maybe_storage_manager_destination.digitranscode_destinationid
+                                                                left join digitranscode_destination maybe_specific_destination
+                                                                          on maybe_specific_destination.StorageManagerId =
+                                                                             maybe_storage_manager_destination.digitranscode_destinationid
+                                                       where pf.media_formatid in
+                                                             (SELECT media_format_id FROM @source_copy_media_format_ids)
+                                                         and (maybe_storage_manager_destination.LaxSecurity = 1 or
+                                                              maybe_specific_destination.LaxSecurity = 1)) as t), '[]'),
+    PreGenerateForChannelFolderIds   = coalesce(
+            (select json_arrayagg(t.LayoutfolderId)
+             from (select distinct LPD.LayoutfolderId
+                   from dz_profileformat pf
+                            join dz_profile p on pf.dz_profileid = p.dz_profileid
+                            join Layoutfolder_Profile_Destination LPD on p.dz_profileid = LPD.Dz_ProfileId
+                   where pf.media_formatid in (SELECT media_format_id FROM @source_copy_media_format_ids)) as t)
+        , '[]')
+where Id = -1
 
 
 drop index [asset_filetable_Media_formatid_index] ON [dbo].[asset_filetable];
