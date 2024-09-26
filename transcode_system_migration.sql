@@ -54,7 +54,7 @@ CREATE TABLE #migratedFormats(
     details NVARCHAR(MAX)
 );
 
-SELECT @formatId=Id, @details=Details FROM [dbo].[Formats] WHERE [Name] = 'Thumbnail');
+SELECT @formatId=Id, @details=Details FROM [dbo].[Formats] WHERE [Name] = 'Thumbnail';
 IF @formatId IS NOT NULL
 BEGIN
     SET @mediaFormatId = (SELECT imf.media_formatid
@@ -74,7 +74,7 @@ BEGIN
     VALUES (@mediaFormatId, @formatId, 'webp', @details);
 END
 
-SELECT @formatId=Id, @details=Details FROM [dbo].[Formats] WHERE [Name] = 'Large Thumbnail');
+SELECT @formatId=Id, @details=Details FROM [dbo].[Formats] WHERE [Name] = 'Large Thumbnail';
 IF @formatId IS NOT NULL
 BEGIN
     SET @mediaFormatId = (SELECT imf.media_formatid
@@ -94,7 +94,7 @@ BEGIN
     VALUES (@mediaFormatId, @formatId, 'webp', @details);
 END
 
-SELECT @formatId=Id, @details=Details FROM [dbo].[Formats] WHERE [Name] = 'PDF');
+SELECT @formatId=Id, @details=Details FROM [dbo].[Formats] WHERE [Name] = 'PDF';
 IF @formatId IS NOT NULL
 BEGIN
     SET @mediaFormatId = (SELECT imf.media_formatid
@@ -114,7 +114,7 @@ BEGIN
     VALUES (@mediaFormatId, @formatId, 'pdf', @details);
 END
 
-SELECT @formatId=Id, @details=Details FROM [dbo].[Formats] WHERE [Name] = 'Video Preview');
+SELECT @formatId=Id, @details=Details FROM [dbo].[Formats] WHERE [Name] = 'Video Preview';
 IF @formatId IS NOT NULL
 BEGIN
     SET @mediaFormatId = (SELECT imf.media_formatid
@@ -134,7 +134,7 @@ BEGIN
     VALUES (@mediaFormatId, @formatId, 'mp4', @details);
 END
 
-SELECT @formatId=Id, @details=Details FROM [dbo].[Formats] WHERE [Name] = 'Audio Preview');
+SELECT @formatId=Id, @details=Details FROM [dbo].[Formats] WHERE [Name] = 'Audio Preview';
 IF @formatId IS NOT NULL
 BEGIN
     SET @mediaFormatId = (SELECT imf.media_formatid
@@ -467,6 +467,44 @@ BEGIN
 	DELETE FROM [dbo].[LoginService_GroupDownloadQualities] WHERE FormatId = CONVERT(NVARCHAR(10), @mediaFormatId);
 END
 DROP TABLE #migratedFormats;
+
+
+-- Prepare special-case migration of source copy media formats.
+declare @source_copy_media_format_ids table (media_format_id int primary key);
+insert into @source_copy_media_format_ids (media_format_id)
+SELECT target_media_formatid
+FROM dbo.media_transcode
+WHERE source_media_formatid IS NULL
+  AND progid = 'DigiJobs.JobFileCopy';
+
+-- Ensures that we create a SourceFormat rendition with `IgnoreSecurity = true` for
+-- each source copy that is available on a destination with LaxSecurity enabled.
+INSERT INTO [dbo].[Renditions]([FormatId], [AssetId], [FilePath], [FileSize], [Fingerprint], [State],
+    [IgnoreSecurity], [ErrorMessage], [LastModified], [LastAccessed], [ExecutionTime])
+SELECT -1,
+       af.assetid,
+       'assets/' + MIN(af.fileName),
+       MAX(af.Size),
+       COALESCE(UPPER(MIN(a.hashsha1)), '') + '-source-' + '{"type":"SourceFormat"}',
+       2,
+       1,
+       NULL,
+       GETDATE(),
+       GETDATE(),
+       '00:00:00' as time
+FROM [dbo].[asset_filetable] af
+    JOIN [dbo].[asset] a on af.assetid = a.assetid
+    JOIN [dbo].[digitranscode_destination] d on af.destinationid = d.digitranscode_destinationid
+    join @source_copy_media_format_ids s on af.Media_formatid = s.media_format_id
+WHERE d.LaxSecurity = 1
+  AND NOT EXISTS(SELECT NULL FROM dbo.Renditions WHERE FormatId = -1 AND AssetId = af.assetId)
+GROUP BY af.assetid;
+
+-- Map the source copy media formats to the SourceFormat with the id -1.
+UPDATE [dbo].[media_format]
+SET mapped_to_format_id=-1
+WHERE media_formatid IN (SELECT media_format_id FROM @source_copy_media_format_ids);
+
 
 drop index [asset_filetable_Media_formatid_index] ON [dbo].[asset_filetable];
 
