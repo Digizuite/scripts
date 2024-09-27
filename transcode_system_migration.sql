@@ -33,7 +33,9 @@ DECLARE @mediaFormatId INT,
     @compressionLevel INT,
     @immediatelyGeneratedFor NVARCHAR(MAX),
     @no_security_folder NVARCHAR(MAX),
-    @pre_generate_folders NVARCHAR(MAX);
+    @pre_generate_folders NVARCHAR(MAX),
+    @assetFilter NVARCHAR(MAX),
+    @assetFilter_AssetType NVARCHAR(MAX);
 
 -- Create temp table with media formats to process.
 CREATE TABLE #mediaFormatsToProcess(
@@ -186,7 +188,7 @@ SELECT mf.media_formatid, mf.media_format_typeid, mfl.medianame, mf.download_rep
                                join dz_profile p on pf.dz_profileid = p.dz_profileid
                                join Layoutfolder_Profile_Destination LPD on p.dz_profileid = LPD.Dz_ProfileId
                       where mf.media_formatid = pf.media_formatid) as t)
-           , '[]')                                              as pre_generate_folders
+           , '[]') as pre_generate_folders
 
 FROM [dbo].[media_format] mf
 JOIN [dbo].[media_format_language] mfl ON mf.media_formatid=mfl.media_formatid
@@ -397,8 +399,8 @@ BEGIN
                         '"ResizeMode":0,' + -- fixed size
                         '"BackgroundWidth":0,' +
                         '"BackgroundHeight":0,' +
-                        '"AudioBitrate":' + CONVERT(NVARCHAR(10), @audioBitrate) + ',' +
-                        '"VideoBitrate":' + CONVERT(NVARCHAR(10), @videoBitrate) +
+                        '"VideoBitrate":' + CONVERT(NVARCHAR(10), @videoBitrate) + ',' +
+                        '"AudioBitrate":' + CONVERT(NVARCHAR(10), @audioBitrate) +
                         '}'
     END
     ELSE IF @extension='mov'
@@ -411,8 +413,8 @@ BEGIN
                         '"ResizeMode":0,' + -- fixed size
                         '"BackgroundWidth":0,' +
                         '"BackgroundHeight":0,' +
-                        '"AudioBitrate":' + CONVERT(NVARCHAR(10), @audioBitrate) + ',' +
-                        '"VideoBitrate":' + CONVERT(NVARCHAR(10), @videoBitrate) +
+                        '"VideoBitrate":' + CONVERT(NVARCHAR(10), @videoBitrate) + ',' +
+                        '"AudioBitrate":' + CONVERT(NVARCHAR(10), @audioBitrate) +
                         '}'
     END
     ELSE IF @extension='mp4'
@@ -425,8 +427,8 @@ BEGIN
                         '"ResizeMode":0,' + -- fixed size
                         '"BackgroundWidth":0,' +
                         '"BackgroundHeight":0,' +
-                        '"AudioBitrate":' + CONVERT(NVARCHAR(10), @audioBitrate) + ',' +
-                        '"VideoBitrate":' + CONVERT(NVARCHAR(10), @videoBitrate) +
+                        '"VideoBitrate":' + CONVERT(NVARCHAR(10), @videoBitrate) + ',' +
+                        '"AudioBitrate":' + CONVERT(NVARCHAR(10), @audioBitrate) +
                         '}'
     END
     ELSE IF @extension='pdf'
@@ -449,9 +451,16 @@ BEGIN
     SET @downloadReplaceMask = (SELECT REPLACE(@downloadReplaceMask, '[%MediaFormatId%]', '[%FormatId%]'));
     SET @downloadReplaceMask = (SELECT REPLACE(@downloadReplaceMask, '[%MediaFormatName%]', '[%FormatName%]'));
 
+    set @assetFilter_AssetType = coalesce((select json_arrayagg(pat.assettypeid) from dz_profileformat pf
+    join dz_profile p on pf.dz_profileid = p.dz_profileid
+    join dz_profile_assettype pat on p.dz_profileid = pat.dz_profileid
+    where pf.media_formatid = @mediaFormatId), '[]');
+
+    set @assetFilter = '{"AssetTypes":' + @assetFilter_AssetType + ',"ChannelFolderIds":' + @pre_generate_folders + '}';
+
     -- Create new format.
-    INSERT INTO [dbo].[Formats]([Name],[Description],[Category],[ImmediatelyGeneratedFor],[DownloadReplaceMask],[Details],[CreatedAt],[LastModified],[PreGenerateForChannelFolderIds],[NoSecurityWhenInChannelFolderIds])
-    VALUES (@name, '', 0, @immediatelyGeneratedFor, NULLIF(@downloadReplaceMask, ''), @details, GETDATE(), GETDATE(), @pre_generate_folders, @no_security_folder);
+    INSERT INTO [dbo].[Formats]([Name],[Description],[Category],[ImmediatelyGeneratedFor],[DownloadReplaceMask],[Details],[CreatedAt],[LastModified],[PreGenerateForChannelFolderIds],[NoSecurityWhenInChannelFolderIds],[AssetFilter])
+    VALUES (@name, '', 0, @immediatelyGeneratedFor, NULLIF(@downloadReplaceMask, ''), @details, GETDATE(), GETDATE(), @pre_generate_folders, @no_security_folder, @assetFilter);
 
     SELECT @formatId=Id FROM [dbo].[Formats] WHERE [Name]=@name;
 
