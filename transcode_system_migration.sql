@@ -385,51 +385,96 @@ BEGIN
             ELSE 2
         END;
         SET @details = '{"type":"Mp3AudioFormat",' +
-                        '"CompressionLevel":' + CONVERT(NVARCHAR(10), @compressionLevel) + ',' +
-                        '"Bitrate":' + CONVERT(NVARCHAR(10), @audioBitrate) +
-                        '}';
+                        '"CompressionLevel":' + CONVERT(NVARCHAR(10), @compressionLevel);
+
+        if @audioBitrate<>0
+            begin
+                        set @details = @details + ',"Bitrate":' + CONVERT(NVARCHAR(10), @audioBitrate)
+            end
+
+            set @details = @details + '}';
     END
     ELSE IF @extension='avi'
     BEGIN
         SET @details = '{"type":"AviVideoFormat",' +
                         '"BackgroundColor":"#00000000",' +
-                        '"CompressionLevel":23,' +
+                        '"CompressionLevel":23,';
+
+        IF @videoBitrate<>0
+        begin
+            set @details = @details +
+                        '"VideoBitrate":' + CONVERT(NVARCHAR(10), @videoBitrate) + ',';
+        end;
+
+
+        IF @audioBitrate<>0
+        begin
+            set @details = @details +
+                        '"AudioBitrate":' + CONVERT(NVARCHAR(10), @audioBitrate) + ',';
+        end;
+
+        set @details = @details +
                         '"Height":' + CONVERT(NVARCHAR(10), @height) + ',' +
                         '"Width":' + CONVERT(NVARCHAR(10), @width) + ',' +
                         '"ResizeMode":0,' + -- fixed size
                         '"BackgroundWidth":0,' +
-                        '"BackgroundHeight":0,' +
-                        '"VideoBitrate":' + CONVERT(NVARCHAR(10), @videoBitrate) + ',' +
-                        '"AudioBitrate":' + CONVERT(NVARCHAR(10), @audioBitrate) +
-                        '}'
+                        '"BackgroundHeight":0' +
+                        '}';
     END
     ELSE IF @extension='mov'
     BEGIN
         SET @details = '{"type":"MovVideoFormat",' +
                         '"BackgroundColor":"#00000000",' +
-                        '"CompressionLevel":23,' +
+                        '"CompressionLevel":23,';
+
+        IF @videoBitrate<>0
+        begin
+            set @details = @details +
+                        '"VideoBitrate":' + CONVERT(NVARCHAR(10), @videoBitrate) + ',';
+        end;
+
+
+        IF @audioBitrate<>0
+        begin
+            set @details = @details +
+                        '"AudioBitrate":' + CONVERT(NVARCHAR(10), @audioBitrate) + ',';
+        end;
+
+        set @details = @details +
                         '"Height":' + CONVERT(NVARCHAR(10), @height) + ',' +
                         '"Width":' + CONVERT(NVARCHAR(10), @width) + ',' +
                         '"ResizeMode":0,' + -- fixed size
                         '"BackgroundWidth":0,' +
-                        '"BackgroundHeight":0,' +
-                        '"VideoBitrate":' + CONVERT(NVARCHAR(10), @videoBitrate) + ',' +
-                        '"AudioBitrate":' + CONVERT(NVARCHAR(10), @audioBitrate) +
-                        '}'
+                        '"BackgroundHeight":0' +
+                        '}';
     END
     ELSE IF @extension='mp4'
     BEGIN
         SET @details = '{"type":"Mp4VideoFormat",' +
                         '"BackgroundColor":"#00000000",' +
-                        '"CompressionLevel":23,' +
+                        '"CompressionLevel":23,';
+
+        IF @videoBitrate<>0
+        begin
+            set @details = @details +
+                        '"VideoBitrate":' + CONVERT(NVARCHAR(10), @videoBitrate) + ',';
+        end;
+
+
+        IF @audioBitrate<>0
+        begin
+            set @details = @details +
+                        '"AudioBitrate":' + CONVERT(NVARCHAR(10), @audioBitrate) + ',';
+        end;
+
+        set @details = @details +
                         '"Height":' + CONVERT(NVARCHAR(10), @height) + ',' +
                         '"Width":' + CONVERT(NVARCHAR(10), @width) + ',' +
                         '"ResizeMode":0,' + -- fixed size
                         '"BackgroundWidth":0,' +
-                        '"BackgroundHeight":0,' +
-                        '"VideoBitrate":' + CONVERT(NVARCHAR(10), @videoBitrate) + ',' +
-                        '"AudioBitrate":' + CONVERT(NVARCHAR(10), @audioBitrate) +
-                        '}'
+                        '"BackgroundHeight":0' +
+                        '}';
+
     END
     ELSE IF @extension='pdf'
         SET @details = '{"type":"PdfFormat"}'
