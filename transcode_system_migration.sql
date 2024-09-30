@@ -8,6 +8,37 @@ Assumptions:
 Things to be aware of:
 	- Since this script changes the configuration of the targeted environment,
 	  please ensure that you handle the changes in Configuration Management after having run this script.
+
+
+
+If a format doesn't have any conditions specified on when it should be created in the old transcode system
+it will be allowed to be created in all cases in the new system. To identify these formats you can use the
+following script. The script can be run after the migration too to identify the "bad" formats for cleanup
+should that be desired.
+
+```
+select mf.media_formatid, mfl.medianame, vf.foldername, vf.folderpath
+from (select mf.media_formatid
+            from media_format mf
+                     left join digizuite_assettype_configs_upload_quality uq on mf.media_formatid = uq.FormatId
+            where uq.FormatId is null
+            intersect
+            select mf.media_formatid
+            from media_format mf
+                     left join dz_profileformat pf on mf.media_formatid = pf.media_formatid
+                     left join dbo.Layoutfolder_Profile_Destination LPD on pf.dz_profileid = LPD.Dz_ProfileId
+            where LPD.Layoutfolder_Profile_DestinationId is null
+
+            except
+            select mft.identifyMediaFormatId from media_format_type mft
+      ) as formats_with_path
+         join media_format mf on mf.media_formatid = formats_with_path.media_formatid
+         join media_format_language mfl on mf.media_formatid = mfl.media_formatid and mfl.languageid = 3
+         left join VirtualFolder vf
+                   on mf.foldermedia_formatID = vf.folderid and vf.repositoryid = 16 and vf.languageid = 3
+order by foldername asc
+```
+
 */
 
 
@@ -496,10 +527,17 @@ BEGIN
     SET @downloadReplaceMask = (SELECT REPLACE(@downloadReplaceMask, '[%MediaFormatId%]', '[%FormatId%]'));
     SET @downloadReplaceMask = (SELECT REPLACE(@downloadReplaceMask, '[%MediaFormatName%]', '[%FormatName%]'));
 
-    set @assetFilter_AssetType = coalesce((select json_arrayagg(pat.assettypeid) from dz_profileformat pf
-    join dz_profile p on pf.dz_profileid = p.dz_profileid
-    join dz_profile_assettype pat on p.dz_profileid = pat.dz_profileid
-    where pf.media_formatid = @mediaFormatId), '[]');
+    set @assetFilter_AssetType = coalesce((select json_arrayagg(t.assetType)
+                                           from (select pat.assettypeid as assetType
+                                                 from dz_profileformat pf
+                                                          join dz_profile p on pf.dz_profileid = p.dz_profileid
+                                                          join dz_profile_assettype pat on p.dz_profileid = pat.dz_profileid
+                                                 where pf.media_formatid = @mediaFormatId
+                                                 union
+                                                 select assetType as assetType
+                                                 from digizuite_assettype_configs_upload_quality
+                                                 where FormatId = @mediaFormatId) as t)
+        , '[]');
 
     set @assetFilter = '{"AssetTypes":' + @assetFilter_AssetType + ',"ChannelFolderIds":' + @pre_generate_folders + '}';
 
@@ -646,3 +684,4 @@ BEGIN CATCH
     SET @stt = ERROR_STATE();
     RaisError(@msg, @sev, @stt);
 END CATCH
+
