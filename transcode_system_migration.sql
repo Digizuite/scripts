@@ -66,7 +66,8 @@ DECLARE @mediaFormatId INT,
     @no_security_folder NVARCHAR(MAX),
     @pre_generate_folders NVARCHAR(MAX),
     @assetFilter NVARCHAR(MAX),
-    @assetFilter_AssetType NVARCHAR(MAX);
+    @assetFilter_AssetType NVARCHAR(MAX),
+    @assetFilter_ChannelFolder NVARCHAR(MAX);
 
 -- Create temp table with media formats to process.
 CREATE TABLE #mediaFormatsToProcess(
@@ -539,7 +540,15 @@ BEGIN
                                                  where FormatId = @mediaFormatId) as t)
         , '[]');
 
-    set @assetFilter = '{"AssetTypes":' + @assetFilter_AssetType + ',"ChannelFolderIds":' + @pre_generate_folders + '}';
+    set @assetFilter_ChannelFolder = @pre_generate_folders;
+
+    -- In case a format is setup to be generated immediately, always consider it available
+    if exists(select * from digizuite_assettype_configs_upload_quality where FormatId = @mediaFormatId)
+        begin
+            set @assetFilter_ChannelFolder = '[]'
+        end
+
+    set @assetFilter = '{"AssetTypes":' + @assetFilter_AssetType + ',"ChannelFolderIds":' + @assetFilter_ChannelFolder + '}';
 
     -- Create new format.
     INSERT INTO [dbo].[Formats]([Name],[Description],[Category],[ImmediatelyGeneratedFor],[DownloadReplaceMask],[Details],[CreatedAt],[LastModified],[PreGenerateForChannelFolderIds],[NoSecurityWhenInChannelFolderIds],[AssetFilter])
