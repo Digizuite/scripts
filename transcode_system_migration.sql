@@ -615,7 +615,7 @@ DROP TABLE #migratedFormats;
 -- Prepare special-case migration of source copy media formats.
 declare @source_copy_media_format_ids table (media_format_id int primary key);
 insert into @source_copy_media_format_ids (media_format_id)
-SELECT target_media_formatid
+SELECT distinct target_media_formatid
 FROM dbo.media_transcode
 WHERE source_media_formatid IS NULL
   AND progid = 'DigiJobs.JobFileCopy';
@@ -693,4 +693,3 @@ BEGIN CATCH
     SET @stt = ERROR_STATE();
     RaisError(@msg, @sev, @stt);
 END CATCH
-
