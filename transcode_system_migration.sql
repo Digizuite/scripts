@@ -588,12 +588,11 @@ BEGIN
            MAX(af.Size),
            COALESCE(UPPER(a.hashsha1), '') + '-' + @extension + '-' + @details,
            2,
-           MAX(CONVERT(tinyint, d.LaxSecurity)), -- ignore security if at least one destination has LaxSecurity enabled.
+           0, -- rely on the migration of profiles to IgnoreSecurity instead of hard-coding it on the rendition.
            NULL,
            GETDATE()
     FROM [dbo].[asset_filetable] af
         JOIN [dbo].[asset] a on af.assetid = a.assetid
-        JOIN [dbo].[digitranscode_destination] d on af.destinationid = d.digitranscode_destinationid
     WHERE af.Media_formatid = @mediaFormatId
 		AND af.Processing = 0
 		AND NOT EXISTS(SELECT NULL FROM [dbo].[Renditions] r WHERE r.FormatId = @formatId AND r.AssetId = af.assetid)
@@ -619,29 +618,6 @@ SELECT distinct target_media_formatid
 FROM dbo.media_transcode
 WHERE source_media_formatid IS NULL
   AND progid = 'DigiJobs.JobFileCopy';
-
--- Ensures that we create a SourceFormat rendition with `IgnoreSecurity = true` for
--- each source copy that is available on a destination with LaxSecurity enabled.
-INSERT INTO [dbo].[Renditions]([FormatId], [AssetId], [FilePath], [FileSize], [Fingerprint], [State],
-    [IgnoreSecurity], [ErrorMessage], [LastModified], [LastAccessed], [ExecutionTime])
-SELECT -1,
-       af.assetid,
-       'assets/' + MIN(af.fileName),
-       MAX(af.Size),
-       COALESCE(UPPER(MIN(a.hashsha1)), '') + '-source-' + '{"type":"SourceFormat"}',
-       2,
-       1,
-       NULL,
-       GETDATE(),
-       GETDATE(),
-       '00:00:00' as time
-FROM [dbo].[asset_filetable] af
-    JOIN [dbo].[asset] a on af.assetid = a.assetid
-    JOIN [dbo].[digitranscode_destination] d on af.destinationid = d.digitranscode_destinationid
-    join @source_copy_media_format_ids s on af.Media_formatid = s.media_format_id
-WHERE d.LaxSecurity = 1
-  AND NOT EXISTS(SELECT NULL FROM dbo.Renditions WHERE FormatId = -1 AND AssetId = af.assetId)
-GROUP BY af.assetid;
 
 -- Map the source copy media formats to the SourceFormat with the id -1.
 UPDATE [dbo].[media_format]
