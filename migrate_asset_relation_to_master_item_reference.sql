@@ -2,8 +2,8 @@
 -- This will remove all existing values for the field first, so if you already have values in the field, they will be lost.
 
 -- Set these variables
-declare @targetMasterItemReferenceFieldItemGuid uniqueidentifier = '1ce1558f-e4d7-490f-87d3-47dbd4ebdfd3';
-declare @sourceAssetRelationTypeId int = 2;
+declare @targetMasterItemReferenceFieldItemGuid uniqueidentifier = '';
+declare @sourceAssetRelationTypeId int = 0;
 
 -- Script starts here
 begin transaction;

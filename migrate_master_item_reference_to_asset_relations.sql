@@ -16,7 +16,7 @@ if not exists (select *
                  and imf.item_datatypeid = 80
                  and imf.autotranslateoverwriteexisting = 1)
     begin
-        throw 51000, 'The specified metafield either does not exist, it is not a MasterItemReference field or it doesn''t have autotranslateoverwritingexisting enabled', 1;
+        throw 51000, 'The specified metafield either does not exist, it is not a MasterItemReference field or it doesn''t have autotranslateoverwriteexisting enabled', 1;
     end
 
 
