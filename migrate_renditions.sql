@@ -1,3 +1,18 @@
+/*
+ This script migrates renditions from the old transcode system to the new transcode system.
+ This script also ensures that download qualities are migrated.
+ It is assumed that new formats have already been created and mapped to the old media formats.
+ 
+ Implementation notes:
+ - We migrate based on the current format details to ensure that the migrated renditions
+   will be valid for the current state of the format. Alternatively, we could have migrated
+   based on the mapped media format settings, similar to what is done in `transcode_system_migration`.
+   The main advantage of migrating based on the current format details is that we can ensure that
+   the renditions are valid for the current state of the format. The main disadvantage is that
+   we need to replace escaped unicode characters in the details.
+ */
+
+
 -- Start transaction to ensure that the migration is atomic.
 BEGIN TRANSACTION
 BEGIN TRY
@@ -45,16 +60,136 @@ BEGIN TRY
 
     -- Replace escaped unicode characters in details.
     UPDATE #migratedFormats
-    SET details = REPLACE(details, '\u002B', '+')
-    WHERE details LIKE '%\u002B%';
+    SET details = REPLACE(details, '\u0021', '!')
+    WHERE details LIKE '%\u0021%';
+
+    UPDATE #migratedFormats
+    SET details = REPLACE(details, '\u0023', '#')
+    WHERE details LIKE '%\u0023%';
+
+    UPDATE #migratedFormats
+    SET details = REPLACE(details, '\u0024', '$')
+    WHERE details LIKE '%\u0024%';
+
+    UPDATE #migratedFormats
+    SET details = REPLACE(details, '\u0025', '%')
+    WHERE details LIKE '%\u0025%';
+
+    UPDATE #migratedFormats
+    SET details = REPLACE(details, '\u0026', '&')
+    WHERE details LIKE '%\u0026%';
+
+    UPDATE #migratedFormats
+    SET details = REPLACE(details, '\u0028', '(')
+    WHERE details LIKE '%\u0028%';
+
+    UPDATE #migratedFormats
+    SET details = REPLACE(details, '\u0029', ')')
+    WHERE details LIKE '%\u0029%';
+
+    UPDATE #migratedFormats
+    SET details = REPLACE(details, '\u002A', '*')
+    WHERE details LIKE '%\u002A%';
     
     UPDATE #migratedFormats
-    SET details = REPLACE(details, '\u003E', '>')
-    WHERE details LIKE '%\u003E%';
+    SET details = REPLACE(details, '\u002B', '+')
+    WHERE details LIKE '%\u002B%';
+
+    UPDATE #migratedFormats
+    SET details = REPLACE(details, '\u002C', ',')
+    WHERE details LIKE '%\u002C%';
+
+    UPDATE #migratedFormats
+    SET details = REPLACE(details, '\u002D', '-')
+    WHERE details LIKE '%\u002D%';
+
+    UPDATE #migratedFormats
+    SET details = REPLACE(details, '\u002E', '.')
+    WHERE details LIKE '%\u002E%';
+
+    UPDATE #migratedFormats
+    SET details = REPLACE(details, '\u002F', '/')
+    WHERE details LIKE '%\u002F%';
+
+    UPDATE #migratedFormats
+    SET details = REPLACE(details, '\u003A', ':')
+    WHERE details LIKE '%\u003A%';
     
+    UPDATE #migratedFormats
+    SET details = REPLACE(details, '\u003B', ';')
+    WHERE details LIKE '%\u003B%';
+
     UPDATE #migratedFormats
     SET details = REPLACE(details, '\u003C', '<')
     WHERE details LIKE '%\u003C%';
+    
+    UPDATE #migratedFormats
+    SET details = REPLACE(details, '\u003D', '=')
+    WHERE details LIKE '%\u003D%';
+
+    UPDATE #migratedFormats
+    SET details = REPLACE(details, '\u003C', '<')
+    WHERE details LIKE '%\u003C%';
+    
+    UPDATE #migratedFormats
+    SET details = REPLACE(details, '\u003F', '?')
+    WHERE details LIKE '%\u003F%';
+
+    UPDATE #migratedFormats
+    SET details = REPLACE(details, '\u003E', '>')
+    WHERE details LIKE '%\u003E%';
+
+    UPDATE #migratedFormats
+    SET details = REPLACE(details, '\u0040', '@')
+    WHERE details LIKE '%\u0040%';
+
+    UPDATE #migratedFormats
+    SET details = REPLACE(details, '\u005B', '[')
+    WHERE details LIKE '%\u005B%';
+
+    UPDATE #migratedFormats
+    SET details = REPLACE(details, '\u005C', '\\')
+    WHERE details LIKE '%\u005C%';
+
+    UPDATE #migratedFormats
+    SET details = REPLACE(details, '\u005D', ']')
+    WHERE details LIKE '%\u005D%';
+
+    UPDATE #migratedFormats
+    SET details = REPLACE(details, '\u005E', '^')
+    WHERE details LIKE '%\u005E%';
+
+    UPDATE #migratedFormats
+    SET details = REPLACE(details, '\u005F', '_')
+    WHERE details LIKE '%\u005F%';
+
+    UPDATE #migratedFormats
+    SET details = REPLACE(details, '\u0060', '`')
+    WHERE details LIKE '%\u0060%';
+
+    UPDATE #migratedFormats
+    SET details = REPLACE(details, '\u007B', '{')
+    WHERE details LIKE '%\u007B%';
+
+    UPDATE #migratedFormats
+    SET details = REPLACE(details, '\u007C', '|')
+    WHERE details LIKE '%\u007C%';
+    
+    UPDATE #migratedFormats
+    SET details = REPLACE(details, '\u007D', '}')
+    WHERE details LIKE '%\u007D%';
+
+    UPDATE #migratedFormats
+    SET details = REPLACE(details, '\u007E', '~')
+    WHERE details LIKE '%\u007E%';
+
+    -- Check for unexpected unicode characters.
+    IF (SELECT NULL FROM #migratedFormats WHERE REPLACE(details, '\u0022', '"') NOT LIKE '%\u00%')
+    BEGIN
+        SELECT * FROM #migratedFormats WHERE REPLACE(details, '\u0022', '"') NOT LIKE '%\u00%';
+        throw 51000, 'An unexpected unicode character was encountered. Please add the missing unicode character translation', 1;
+    END
+
 
     -- Create an index to make the next query operation faster.
     CREATE NONCLUSTERED INDEX [asset_filetable_Media_formatid_index] ON [dbo].[asset_filetable]
