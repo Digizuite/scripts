@@ -47,7 +47,7 @@ BEGIN TRY
     WHERE formatId IN 
           (SELECT Id 
            FROM Formats 
-           WHERE Guid IN ('88c69734-3905-4940-9e1a-851fe2ab10b8', '0a46c385-7b90-4364-bcb0-87265bcc216d');
+           WHERE Guid IN ('88c69734-3905-4940-9e1a-851fe2ab10b8', '0a46c385-7b90-4364-bcb0-87265bcc216d'));
 
     -- Ensure that the correct extensions are used.
     UPDATE #migratedFormats
@@ -184,9 +184,9 @@ BEGIN TRY
     WHERE details LIKE '%\u007E%';
 
     -- Check for unexpected unicode characters.
-    IF (SELECT NULL FROM #migratedFormats WHERE REPLACE(details, '\u0022', '"') NOT LIKE '%\u00%')
+    IF EXISTS(SELECT NULL FROM #migratedFormats WHERE REPLACE(details, '\u0022', '"') LIKE '%\u00%')
     BEGIN
-        SELECT * FROM #migratedFormats WHERE REPLACE(details, '\u0022', '"') NOT LIKE '%\u00%';
+        SELECT * FROM #migratedFormats WHERE REPLACE(details, '\u0022', '"') LIKE '%\u00%';
         throw 51000, 'An unexpected unicode character was encountered. Please add the missing unicode character translation', 1;
     END
 
