@@ -287,9 +287,6 @@ with mappings as (select 'e69b166e-f854-46f6-b226-570d71c6b9a8' as from_cat_guid
                                     where q.src_assetid = f4.src_assetid
                                       and q.relation_type_id = f4.relation_type_id)
                   )
-/*select *
-from filtered*/ 
-
 insert into asset_relations (asset_relation_type_id, primary_asset_id, secondary_asset_id, allowed_multiplicity)
 select relation_type_id, src_assetid, dst_assetid, multiplicity
 from filtered
