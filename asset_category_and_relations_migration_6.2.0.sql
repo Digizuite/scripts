@@ -1,3 +1,13 @@
+IF NOT EXISTS (SELECT *
+               FROM ConfigurationManagementService_ConfigurationLayers
+               WHERE Name = 'KeyShot')
+    RETURN;
+    
+IF EXISTS (SELECT *
+           FROM ConfigurationManagementService_ConfigurationLayers
+           WHERE Name = 'KeyShot' AND TemplateVersion = '6.2.0')
+    RETURN;
+
 DECLARE @rootId int = 1;
 DECLARE @renderOutputGuid uniqueidentifier = '3e2851ad-5013-4ca3-9b4b-d37e22eafa02';
 MERGE asset_category as target
