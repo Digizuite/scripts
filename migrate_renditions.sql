@@ -34,7 +34,7 @@ BEGIN TRY
     SELECT
         mf.media_formatid,
         mf.mapped_to_format_id,
-        (SELECT TOP 1 extension FROM media_format_type_extension mfte WHERE mfte.media_format_typeid = mf.media_format_typeid),
+        (SELECT TOP 1 LOWER(extension) FROM media_format_type_extension mfte WHERE mfte.media_format_typeid = mf.media_format_typeid),
         F.Details
     FROM media_format mf
     JOIN Formats F on F.Id = mf.mapped_to_format_id

@@ -250,7 +250,7 @@ BEGIN
     END
 
     -- Get the extension of the media format.
-    SELECT TOP 1 @extension=extension FROM [dbo].[media_format_type_extension] WHERE media_format_typeid=@mediaFormatTypeId;
+    SELECT TOP 1 @extension=LOWER(extension) FROM [dbo].[media_format_type_extension] WHERE media_format_typeid=@mediaFormatTypeId;
 
     IF @extension IN ('jpg', 'jpeg', 'png', 'webp', 'avif', 'tif', 'tiff') AND (@settings IS NULL OR @settings='')
     BEGIN
