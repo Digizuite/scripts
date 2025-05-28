@@ -120,14 +120,12 @@ INSERT INTO @metafieldGroupGuids VALUES
                                      ('ed592e05-df20-4bd5-af08-eb03d4224888'), /*Config OC*/
                                      ('4709dc11-113d-475b-a8fc-325162e07930'), /*Product Urls OC*/
                                      ('5008b64b-4ce9-464f-9e4b-331780661dbd'), /*Video Portal*/
-                                     ('45cd1302-4672-4f11-9fd7-de537ea00562'), /*Media Manager*/
                                      ('96742e6e-546e-44ad-a893-807ae20cf2c2'), /*Default previews*/
                                      ('e708fc6c-cf77-408f-9ff8-3dfbeefde818'), /*Default previews*/
                                      ('2949707f-ca66-4d66-b57a-cb8c4aee69b0'), /*Default previews*/
                                      ('b3ea7051-307e-48ef-84f8-63256392d582'), /*Default previews*/
                                      ('8f3fd490-d437-446d-a2cf-3513b67df2a3'), /*Default previews*/
                                      ('8244c6dc-d1e2-41b9-b2d7-e668b13bbfd8'), /*Meta tags*/
-                                     ('e9c886ac-de43-43dc-84e6-63f9d68322f2'), /*Options*/
                                      ('b52a269a-2796-4ed3-9f82-11b1a6683d4f'), /*Layoutfolder OfficeConnector*/
                                      ('3e51aba0-8050-418e-a371-5b99c87edafc'), /*Reklame Video*/
                                      ('c2571fdd-e110-46c5-b150-c4610868db67'), /*UserFields*/
