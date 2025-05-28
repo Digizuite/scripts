@@ -75,6 +75,120 @@ END
 GO
 
 
+ALTER PROCEDURE [dbo].[DeleteMetafield]
+@itemGuid UNIQUEIDENTIFIER
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @trancount INT = @@TRANCOUNT;
+    /* Only use with DAM update scripts! And don't use this with metafields belong to assets (Asset Info etc.) */
+
+    BEGIN TRY;
+    IF @trancount = 0 BEGIN TRANSACTION;
+    ELSE SAVE TRANSACTION DeleteMetafield;
+
+    DECLARE @msg NVARCHAR(MAX);
+    DECLARE @itemsToDelete TABLE([metafieldid] int, [metafield_itemid] int, [datatypeid] int, [metafieldlabelid] int, [metafieldlabel_itemid] int);
+    INSERT INTO @itemsToDelete
+    SELECT imf.item_metafieldid, imf_item.itemid, imf.item_datatypeid, iml.item_metafield_labelid, iml_item.itemid
+    FROM           dbo.item_metafield imf
+                       INNER JOIN dbo.item_item_metafield iim on imf.item_metafieldid = iim.item_metafieldid
+                       INNER JOIN dbo.item imf_item on iim.itemid = imf_item.itemid
+                       INNER JOIN dbo.item_metafield_label iml on imf.item_metafieldid = iml.item_metafieldid
+                       INNER JOIN dbo.item_item_metafield_label iiml on iml.item_metafield_labelid = iiml.item_metafield_labelid
+                       INNER JOIN dbo.item iml_item on iiml.itemid = iml_item.itemid
+    WHERE imf_item.ItemGuid = @itemGuid;
+
+    IF @@ROWCOUNT = 0
+        BEGIN
+            RAISERROR(N'Metafield does not exist', 0, 1);
+            IF @trancount = 0 ROLLBACK TRANSACTION;
+            RETURN;
+        END
+
+    DECLARE @valueCount BIGINT = 0;
+    DELETE FROM dbo.item_metafield_value WHERE [item_metafield_labelid] IN (SELECT [metafieldlabelid] FROM @itemsToDelete);
+    SET @valueCount = @valueCount + @@ROWCOUNT;
+    DELETE FROM dbo.item_metafield_value WHERE [ref_itemid] IN (SELECT [metafield_itemid] FROM @itemsToDelete);
+    SET @valueCount = @valueCount + @@ROWCOUNT;
+    DELETE FROM dbo.item_metafield_value WHERE [ref_itemid] IN (SELECT [metafieldlabel_itemid] FROM @itemsToDelete);
+    SET @valueCount = @valueCount + @@ROWCOUNT;
+    DELETE FROM dbo.item_note_value WHERE [item_metafield_labelid] IN (SELECT [metafieldlabelid] FROM @itemsToDelete);
+    SET @valueCount = @valueCount + @@ROWCOUNT;
+    DELETE FROM dbo.Meta_Value_Version WHERE [LabelId] IN (SELECT [metafieldlabelid] FROM @itemsToDelete);
+    SET @valueCount = @valueCount + @@ROWCOUNT;
+    DELETE FROM dbo.Meta_Value_Version WHERE [Ref_ItemId] IN (SELECT [metafield_itemid] FROM @itemsToDelete);
+    SET @valueCount = @valueCount + @@ROWCOUNT;
+    DELETE FROM dbo.Meta_Value_Version WHERE [Ref_ItemId] IN (SELECT [metafieldlabel_itemid] FROM @itemsToDelete);
+    SET @valueCount = @valueCount + @@ROWCOUNT;
+    SET @msg = CAST(@valueCount AS nvarchar(MAX)) + N' values deleted.';
+    RAISERROR(@msg, 0, 1) WITH NOWAIT;
+
+    DECLARE @treesToDelete TABLE([treevalueid] int, [treevalue_itemid] int);
+    INSERT INTO @treesToDelete
+    SELECT itv.item_tree_valueid, item.itemid
+    FROM dbo.item_tree_value itv
+             INNER JOIN dbo.item_item_tree_value iitv on itv.item_tree_valueid = iitv.item_tree_valueid
+             INNER JOIN dbo.item on iitv.itemid = item.itemid
+    WHERE itv.item_metafield_labelid IN (SELECT [metafieldlabelid] FROM @itemsToDelete);
+    IF @@ROWCOUNT > 0
+        BEGIN;
+        DELETE FROM dbo.item_item_tree_value WHERE [item_tree_valueid] IN (SELECT [treevalueid] FROM @treesToDelete);
+        DELETE FROM dbo.item_tree_value WHERE [item_tree_valueid] IN (SELECT [treevalueid] FROM @treesToDelete);
+        DELETE FROM dbo.item_security WHERE [object_itemid] IN (SELECT [treevalue_itemid] FROM @treesToDelete);
+        DELETE FROM dbo.item WHERE [itemid] IN (SELECT [treevalue_itemid] FROM @treesToDelete);
+        SET @msg = CAST(@@ROWCOUNT AS nvarchar(MAX)) + N' treevalues deleted.';
+        RAISERROR(@msg, 0, 1) WITH NOWAIT;
+        END;
+
+    DECLARE @combosToDelete TABLE([combovalueid] int, [combovalue_itemid] int);
+    INSERT INTO @combosToDelete
+    SELECT icv.item_combo_valueid, item.itemid
+    FROM dbo.item_combo_value icv
+             INNER JOIN dbo.item_item_combo_value iicv on icv.item_combo_valueid = iicv.item_combo_valueid
+             INNER JOIN dbo.item on iicv.itemid = item.itemid
+    WHERE icv.item_metafield_labelid IN (SELECT [metafieldlabelid] FROM @itemsToDelete);
+    IF @@ROWCOUNT > 0
+        BEGIN;
+        DELETE FROM dbo.item_item_combo_value WHERE [item_combo_valueid] IN (SELECT [combovalueid] FROM @combosToDelete);
+        DELETE FROM dbo.item_combo_value WHERE [item_combo_valueid] IN (SELECT [combovalueid] FROM @combosToDelete);
+        DELETE FROM dbo.item_security WHERE [object_itemid] IN (SELECT [combovalue_itemid] FROM @combosToDelete);
+        DELETE FROM dbo.item WHERE [itemid] IN (SELECT [combovalue_itemid] FROM @combosToDelete);
+        SET @msg = CAST(@@ROWCOUNT AS nvarchar(MAX)) + N' combovalues deleted.';
+        RAISERROR(@msg, 0, 1) WITH NOWAIT;
+        END;
+
+    DELETE FROM dbo.item_item_metafield_label WHERE [item_metafield_labelid] IN (SELECT [metafieldlabelid] FROM @itemsToDelete);
+    DELETE FROM dbo.item_metafield_reference WHERE [metafield_labelid] IN (SELECT [metafieldlabelid] FROM @itemsToDelete)
+                                                OR [ref_metafield_labelid] IN (SELECT [metafieldlabelid] FROM @itemsToDelete)
+                                                OR [lookup_metafieldlabelid] IN (SELECT [metafieldlabelid] FROM @itemsToDelete);
+    DELETE FROM dbo.item_metafield_label WHERE [item_metafield_labelid] IN (SELECT [metafieldlabelid] FROM @itemsToDelete);
+    DELETE FROM dbo.item_security WHERE [object_itemid] IN (SELECT [metafieldlabel_itemid] FROM @itemsToDelete);
+    DELETE FROM dbo.item WHERE [itemid] IN (SELECT [metafieldlabel_itemid] FROM @itemsToDelete);
+    SET @msg = CAST(@@ROWCOUNT AS nvarchar(MAX)) + N' metafieldlabels deleted.';
+    RAISERROR(@msg, 0, 1) WITH NOWAIT;
+
+    DELETE FROM dbo.item_item_metafield WHERE [item_metafieldid] IN (SELECT [metafieldid] FROM @itemsToDelete);
+    DELETE FROM dbo.item_metafield WHERE [item_metafieldid] IN (SELECT [metafieldid] FROM @itemsToDelete);
+    DELETE FROM dbo.item_security WHERE [object_itemid] IN (SELECT [metafield_itemid] FROM @itemsToDelete);
+    DELETE FROM dbo.item WHERE [itemid] IN (SELECT [metafield_itemid] FROM @itemsToDelete);
+    SET @msg = N'Metafield ''' + CAST(@itemGuid AS nvarchar(MAX)) + N''' deleted.';
+    RAISERROR(@msg, 0, 1) WITH NOWAIT;
+
+    IF @trancount = 0 COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH;
+    DECLARE @xstate INT = XACT_STATE();
+    IF @xstate = -1 ROLLBACK TRANSACTION;
+    IF @xstate = 1 AND @trancount = 0 ROLLBACK TRANSACTION;
+    IF @xstate = 1 AND @trancount > 0 ROLLBACK TRANSACTION DeleteMetafield;
+
+    THROW;
+    END CATCH
+END
+GO
+
+
 DECLARE @metafieldGroupGuids TABLE (guid uniqueidentifier not null);
 DECLARE @metafieldGroupsToDelete TABLE (guid uniqueidentifier not null);
 DECLARE @currentGuid uniqueidentifier, @currentGuidString nvarchar(128);
