@@ -255,7 +255,13 @@ INSERT INTO @metafieldGroupGuids VALUES
                                      ('9ec20501-ce4e-4ad1-9c47-ccad794a743b'), /*Relateret Materiale*/
                                      ('6e7d857d-4094-43a9-b535-ac9696c75b00'), /*Topbar links*/
                                      ('6357cb96-9405-460f-ad65-8134fe017eba'), /*DFS Default previews*/
-                                     ('9b980d53-8977-4e0b-9379-c4b988b668bf'); /*Episerver Crop*/
+                                     ('9b980d53-8977-4e0b-9379-c4b988b668bf'), /*Episerver Crop*/
+                                     ('8e04b0d0-a657-4d1d-bcfb-5059707462db'), /*AI Config*/
+                                     ('2806afcf-1345-4213-a762-16a812c3ffee'), /*Copyright Notification*/
+                                     ('928e748e-1956-438d-81a5-6c64d838afc3'), /*MailTemplate*/
+                                     ('b088b01b-0b3b-4644-be69-f9d6625a12c1'), /*Presets*/
+                                     ('09e1b967-80b2-4e73-86b2-fd5ffb8b333f'), /*Presets*/
+                                     ('750847da-c10a-4022-b7ef-6022732e02f9'); /*Download request*/
 
 
 EXEC dbo.DeleteProduct @ProductGuid = 'f77a0b88-f80a-45ce-a5b9-65b6e7817fbe';/* VP3 */
