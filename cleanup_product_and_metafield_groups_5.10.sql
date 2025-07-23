@@ -192,8 +192,7 @@ GO
 DECLARE @metafieldGroupGuids TABLE (guid uniqueidentifier not null);
 DECLARE @metafieldGroupsToDelete TABLE (guid uniqueidentifier not null);
 DECLARE @currentGuid uniqueidentifier, @currentGuidString nvarchar(128);
-INSERT INTO @metafieldGroupGuids VALUES
-                                     ('4f251d08-0ddf-4e0f-8dd9-7379c66d23ac'), /*Images*/
+INSERT INTO @metafieldGroupGuids VALUES                                     
                                      ('11e7b6c6-8c99-4de3-b022-33c4ff2a64fc'), /*Drawing*/
                                      ('9dbebec4-da6b-46d1-8af5-deae210a1941'), /*Sharing*/
                                      ('205f112c-a91c-42d2-8ded-52cc72a9e9a8'), /*Sharing Tab*/
@@ -210,12 +209,9 @@ INSERT INTO @metafieldGroupGuids VALUES
                                      ('aa1affbe-b89c-456d-bbd1-416792f9cede'), /*Comments*/
                                      ('35ea4845-ead2-4e01-ba0f-c8da1844e232'), /*FrontendUserUpload*/
                                      ('85996024-fcd3-436e-aeca-02446bebfd68'), /*FrontendUserGroupUpload*/
-                                     ('7f5ac61e-5fe0-4caa-a4b2-d1bb64ed6daa'), /*Geotag*/
-                                     ('96188a9f-85c5-46fc-83ee-c66835f5d117'), /*Exif*/
                                      ('20dfaf7b-a1a2-4775-a237-262c3a9358dd'), /*Layoutfolder Digizuite™ DigiUpload Mobile*/
                                      ('5a8c0cf9-866a-4d69-8104-42b262afbb80'), /*User Config*/
                                      ('7352526f-5f84-4fac-a5da-e2eb8d586104'), /*Video Commercial*/
-                                     ('64525db4-b986-4903-9929-dd11243a2ab1'), /*IPTC*/
                                      ('6bc6c76f-1611-4bec-b2f2-cbbff06422d6'), /*Product Urls DC*/
                                      ('b89bdff1-c619-4b48-a23f-a0c1bc7405e7'), /*Config VP3*/
                                      ('66b26514-43f8-4745-baf8-f47ec7e4ac68'), /*Product Urls VP3*/
